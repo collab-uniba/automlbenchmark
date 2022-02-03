@@ -175,7 +175,7 @@ TPOT:
 #    verbosity: 2
 
 AutoKeras:
-  version: 'latest'
+  version: 'stable'
   descritpion: |
     AutoKeras: An AutoML system based on Keras. It is developed by DATA Lab at Texas A&M University. 
     The goal of AutoKeras is to make machine learning accessible to everyone..

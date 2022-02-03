@@ -5,8 +5,9 @@ import sys
 import tempfile as tmp
 
 from autokeras import StructuredDataClassifier, StructuredDataRegressor, __version__
-from tensorflow.keras import metrics
+from tensorflow.keras import metrics, losses
 from keras import backend as K
+
 
 from frameworks.shared.callee import call_run, output_subdir, result
 from frameworks.shared.utils import Timer, is_sparse
@@ -44,37 +45,115 @@ def run(dataset, config):
 
     training_params = {k: v for k, v in config.framework_params.items() if not k.startswith('_')}
     n_jobs = config.framework_params.get('_n_jobs', config.cores)  # useful to disable multicore, regardless of the dataset config
-    config_dict = config.framework_params.get('_config_dict', "TPOT sparse" if is_sparse(X_train) else None)
-
-    log.info('Running AutoKeras with a maximum time of %ss on %s cores, optimizing %s.',
-             config.max_runtime_seconds, n_jobs, scoring_metric)
+    if GPU:
+        num_GPU = 1
+        num_CPU = 1
+    if CPU:
+        num_CPU = 1
+        num_GPU = 0
+    config = tf.ConfigProto(intra_op_parallelism_threads=n_jobs,
+                            inter_op_parallelism_threads=n_jobs, 
+                            allow_soft_placement=True,
+                            device_count = {'CPU' : num_CPU,
+                                            'GPU' : num_GPU}
+                            )
+    session = tf.Session(config=config)
+    K.set_session(session)
+    output_dir = config.output_dir
+    project_name = config.framework + config.name
     runtime_min = (config.max_runtime_seconds/60)
+    log.info(f'Running AutoKeras on {n_jobs} cores, optimizing {scoring_metric}.',
+            f'Please, note that the time limit of {runtime_min} cannot be enforced on Keras.')
 
-(project_name=project, directory=destination, max_trials=trials, seed=1977,
-                                       overwrite=True)
-    estimator = StructuredDataClassifier if is_classification else StructuredDataRegressor
-    tpot = estimator(n_jobs=n_jobs,
-                     max_time_mins=runtime_min,
-                     scoring=scoring_metric,
-                     random_state=config.seed,
-                     config_dict=config_dict,
-                     **training_params)
+    if  is_classification: 
+        estimator = StructuredDataClassifier
+        if dataset.type is DatasetType.binary:
+            lossfn = losses.BinaryCrossEntropy()
+            objective = 'binary_crossentropy'  # logloss
+        elif dataset.type is DatasetType.multiclass:
+            lossfn = losses.CategoricalCrossEntropy()
+            objective = 'categorical_crossentropy'
+    else:
+        estimator = StructuredDataRegressor
+        lossfn = losses.MeanSquaredError()
+        objective = 'mean_squared_error'
+    #     loss: A Keras loss function. Defaults to use 'mean_squared_error'.
+    #     metrics: A list of Keras metrics. Defaults to use 'mean_squared_error'.
+    #     project_name: String. The name of the AutoModel. Defaults to
+    #         'structured_data_regressor'.
+    #     max_trials: Int. The maximum number of different Keras Models to try.
+    #         The search may finish before reaching the max_trials. Defaults to 100.
+    #     directory: String. The path to a directory for storing the search outputs.
+    #         Defaults to None, which would create a folder with the name of the
+    #         AutoModel in the current directory.
+    #     objective: String. Name of model metric to minimize
+    #         or maximize, e.g. 'val_accuracy'. Defaults to 'val_loss'.
+    #     tuner: String or subclass of AutoTuner. If string, it should be one of
+    #         'greedy', 'bayesian', 'hyperband' or 'random'. It can also be a subclass
+    #         of AutoTuner. If left unspecified, it uses a task specific tuner, which
+    #         first evaluates the most commonly used models for the task before
+    #         exploring other models.
+    #     overwrite: Boolean. Defaults to `False`. If `False`, reloads an existing
+    #         project of the same name if one is found. Otherwise, overwrites the
+    #         project.
+    #     seed: Int. Random seed.
+    #     max_model_size: Int. Maximum number of scalars in the parameters of a
+    #         model. Models larger than this are rejected.
+
+    aks = estimator(project_name=project_name,
+                    directory=output_dir,
+                    metrics=scoring_metric,
+                    seed=config.seed,
+                    overwrite=True,
+                    loss=lossfn,
+                    objective=objective,
+                    **training_params)
 
     with Timer() as training:
-        tpot.fit(X_train, y_train)
+        #     x: numpy.ndarray or tensorflow.Dataset. Training data x.
+        #     y: numpy.ndarray or tensorflow.Dataset. Training data y.
+        #     batch_size: Int. Number of samples per gradient update. Defaults to 32.
+        #     epochs: Int. The number of epochs to train each model during the search.
+        #         If unspecified, by default we train for a maximum of 1000 epochs,
+        #         but we stop training if the validation loss stops improving for 10
+        #         epochs (unless you specified an EarlyStopping callback as part of
+        #         the callbacks argument, in which case the EarlyStopping callback you
+        #         specified will determine early stopping).
+        #     callbacks: List of Keras callbacks to apply during training and
+        #         validation.
+        #     validation_split: Float between 0 and 1. Defaults to 0.2.
+        #         Fraction of the training data to be used as validation data.
+        #         The model will set apart this fraction of the training data,
+        #         will not train on it, and will evaluate
+        #         the loss and any model metrics
+        #         on this data at the end of each epoch.
+        #         The validation data is selected from the last samples
+        #         in the `x` and `y` data provided, before shuffling. This argument is
+        #         not supported when `x` is a dataset.
+        #         The best model found would be fit on the entire dataset including the
+        #         validation data.
+        #     validation_data: Data on which to evaluate the loss and any model metrics
+        #         at the end of each epoch. The model will not be trained on this data.
+        #         `validation_data` will override `validation_split`. The type of the
+        #         validation data should be the same as the training data.
+        #         The best model found would be fit on the training dataset without the
+        #         validation data.
+        #     verbose: 0, 1, or 2. Verbosity mode. 0 = silent, 1 = progress bar,
+        #         2 = one line per epoch. Note that the progress bar is not
+        #         particularly useful when logged to a file, so verbose=2 is
+        #         recommended when not running interactively (eg, in a production
+        #         environment). Controls the verbosity of both KerasTuner search and
+        #         [keras.Model.fit](https://www.tensorflow.org/api_docs/python/tf/keras/Model#fit)
+        aks.fit(X_train, y_train, batch_size=32, verbose=1)
 
     log.info('Predicting on the test set.')
     X_test = dataset.test.X
     y_test = dataset.test.y
     with Timer() as predict:
-        predictions = tpot.predict(X_test)
-    try:
-        probabilities = tpot.predict_proba(X_test) if is_classification else None
-    except RuntimeError:
-        # TPOT throws a RuntimeError if the optimized pipeline does not support `predict_proba`.
-        probabilities = "predictions"  # encoding is handled by caller in `__init__.py`
-
-    save_artifacts(tpot, config)
+        predictions = aks.predict(X_test)
+    probabilities = aks.predict_proba(X_test) if is_classification else None
+ 
+    save_artifacts(ak, config)
 
     return result(output_file=config.output_predictions_file,
                   predictions=predictions,

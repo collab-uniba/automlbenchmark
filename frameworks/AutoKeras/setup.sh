@@ -7,13 +7,18 @@ if [[ "$VERSION" == "latest" ]]; then
     VERSION="master"
 fi
 
+vers=$(lsb_release -d | awk '{print $2}')
+
 # creating local venv
 . ${HERE}/../shared/setup.sh ${HERE} true
-
 if [[ -x "$(command -v apt-get)" ]]; then
-    SUDO apt-get install -y build-essential swig
+    wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/cuda-ubuntu1804.pin
+    SUDO mv cuda-ubuntu1804.pin /etc/apt/preferences.d/cuda-repository-pin-600
+    SUDO apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/7fa2af80.pub
+    SUDO add-apt-repository "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/ /"
+    SUDO apt-get update
+    SUDO apt-get -y install cuda
 fi
-
 PIP install --no-cache-dir -r ${HERE}/requirements.txt
 
 if [[ "$VERSION" == "stable" ]]; then
@@ -27,4 +32,4 @@ else
     PIP install -U -e ${TARGET_DIR}
 fi
 
-PY -c "import autokeras import __version__; print(__version__)" >> "${HERE}/.setup/installed"
+PY -c "from autokeras import __version__; print(__version__)" >> "${HERE}/.setup/installed"

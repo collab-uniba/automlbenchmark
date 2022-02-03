@@ -1,0 +1,6 @@
+---
+# a selection of tasks used to validate the benchmark app: various sizes, format (with/out nans, missing values...)
+
+- name: stackoverflow
+  openml_task_id: 360987
+  description: "Multiclass classification from a dataset of 4400 posts from Stack Overflow"
