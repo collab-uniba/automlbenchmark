@@ -5,9 +5,10 @@ import sys
 import tempfile as tmp
 
 from autokeras import StructuredDataClassifier, StructuredDataRegressor, __version__
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # INFO and WARNING messages are not printed
+import tensorflow as tf
 from tensorflow.keras import metrics, losses
 from keras import backend as K
-
 
 from frameworks.shared.callee import call_run, output_subdir, result
 from frameworks.shared.utils import Timer, is_sparse
@@ -26,54 +27,48 @@ def run(dataset, config):
     is_classification = config.type == 'classification'
     # Mapping of benchmark metrics to TPOT metrics
     metrics_mapping = dict(
-        acc=metrics.Accuracy(),
-        auc=metrics.AUC(),
+        acc='accuracy',
+        auc='AUC',
         f1=(lambda y, pred: _f1(y, pred), False),
-        # logloss='logloss',
-        mae=metrics.MeanAbsoluteError(),
-        mse=metrics.MeanSquaredError(),
-        msle=metrics.MeanSquaredLogarithmicError(),
+        logloss='logloss',
+        mae='MeanAbsoluteError',
+        mse='MeanSquaredError',
+        msle='MeanSquaredLogarithmicError',
         # r2='r2',
-        rmse=metrics.RootMeanSquaredError(),
+        rmse='RootMeanSquaredError',
     )
     scoring_metric = metrics_mapping[config.metric] if config.metric in metrics_mapping else None
     if scoring_metric is None:
         raise ValueError("Performance metric {} not supported.".format(config.metric))
 
-    X_train = dataset.train.X
-    y_train = dataset.train.y
-
     training_params = {k: v for k, v in config.framework_params.items() if not k.startswith('_')}
     n_jobs = config.framework_params.get('_n_jobs', config.cores)  # useful to disable multicore, regardless of the dataset config
-    if GPU:
-        num_GPU = 1
-        num_CPU = 1
-    if CPU:
-        num_CPU = 1
-        num_GPU = 0
-    config = tf.ConfigProto(intra_op_parallelism_threads=n_jobs,
-                            inter_op_parallelism_threads=n_jobs, 
-                            allow_soft_placement=True,
-                            device_count = {'CPU' : num_CPU,
-                                            'GPU' : num_GPU}
-                            )
-    session = tf.Session(config=config)
-    K.set_session(session)
+
+    # tfcfg = tf.compat.v1.ConfigProto(intra_op_parallelism_threads=n_jobs,
+    #                         inter_op_parallelism_threads=n_jobs, 
+    #                         allow_soft_placement=True
+    #                         )
+    # session = tf.compat.v1.Session(config=tfcfg)
+    # K.set_session(session) 
     output_dir = config.output_dir
     project_name = config.framework + config.name
     runtime_min = (config.max_runtime_seconds/60)
-    log.info(f'Running AutoKeras on {n_jobs} cores, optimizing {scoring_metric}.',
-            f'Please, note that the time limit of {runtime_min} cannot be enforced on Keras.')
+    log.info(f'Running AutoKeras on {n_jobs} cores, optimizing {scoring_metric}.')
+    log.info(f'Please, note that the time limit of {runtime_min} cannot be enforced on Keras.')
 
+    X_train = dataset.train.X
+    y_train = dataset.train.y
+    is_classification = config.type == 'classification'
+    log.info("Running AutoKeras for {config.type}.")
     if  is_classification: 
         estimator = StructuredDataClassifier
-        if dataset.type is DatasetType.binary:
+        if dataset.problem_type is 'binary':
             lossfn = losses.BinaryCrossEntropy()
             objective = 'binary_crossentropy'  # logloss
-        elif dataset.type is DatasetType.multiclass:
+        elif dataset.problem_type is 'multiclass':
             lossfn = losses.CategoricalCrossEntropy()
             objective = 'categorical_crossentropy'
-    else:
+    else:  # 'regression'
         estimator = StructuredDataRegressor
         lossfn = losses.MeanSquaredError()
         objective = 'mean_squared_error'
@@ -102,12 +97,11 @@ def run(dataset, config):
 
     aks = estimator(project_name=project_name,
                     directory=output_dir,
-                    metrics=scoring_metric,
+                    #metrics=scoring_metric,
                     seed=config.seed,
-                    overwrite=True,
-                    loss=lossfn,
-                    objective=objective,
-                    **training_params)
+                    #loss=lossfn,
+                    #objective=objective,
+                    **training_params)  # overwrite=True
 
     with Timer() as training:
         #     x: numpy.ndarray or tensorflow.Dataset. Training data x.
@@ -144,23 +138,25 @@ def run(dataset, config):
         #         recommended when not running interactively (eg, in a production
         #         environment). Controls the verbosity of both KerasTuner search and
         #         [keras.Model.fit](https://www.tensorflow.org/api_docs/python/tf/keras/Model#fit)
-        aks.fit(X_train, y_train, batch_size=32, verbose=1)
+        aks.fit(X_train, y_train, epochs=2, batch_size=16, verbose=1)
 
     log.info('Predicting on the test set.')
     X_test = dataset.test.X
     y_test = dataset.test.y
     with Timer() as predict:
+        log.info('Predicting on the test set.')
         predictions = aks.predict(X_test)
-    probabilities = aks.predict_proba(X_test) if is_classification else None
+    probabilities = aks.export_model().predict(X_test) if is_classification else None
  
-    save_artifacts(ak, config)
+    log.info('Saving the artifacts.')
+    save_artifacts(aks, config)
 
     return result(output_file=config.output_predictions_file,
                   predictions=predictions,
                   truth=y_test,
                   probabilities=probabilities,
                   target_is_encoded=is_classification,
-                  models_count=len(tpot.evaluated_individuals_),
+                  #models_count=len(aks.evaluated_individuals_),
                   training_duration=training.duration,
                   predict_duration=predict.duration)
 

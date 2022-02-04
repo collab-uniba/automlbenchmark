@@ -7,18 +7,10 @@ if [[ "$VERSION" == "latest" ]]; then
     VERSION="master"
 fi
 
-vers=$(lsb_release -d | awk '{print $2}')
+ver=$(lsb_release -r | awk '{print $2}')
 
 # creating local venv
 . ${HERE}/../shared/setup.sh ${HERE} true
-if [[ -x "$(command -v apt-get)" ]]; then
-    wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/cuda-ubuntu1804.pin
-    SUDO mv cuda-ubuntu1804.pin /etc/apt/preferences.d/cuda-repository-pin-600
-    SUDO apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/7fa2af80.pub
-    SUDO add-apt-repository "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/ /"
-    SUDO apt-get update
-    SUDO apt-get -y install cuda
-fi
 PIP install --no-cache-dir -r ${HERE}/requirements.txt
 
 if [[ "$VERSION" == "stable" ]]; then

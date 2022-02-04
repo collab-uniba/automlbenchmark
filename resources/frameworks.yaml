@@ -183,8 +183,9 @@ AutoKeras:
   refs:
     - https://autokeras.com
     - https://github.com/keras-team
-#  params:
-#    overwrite: True, 
+  params:
+    overwrite: True
+#    verbose: 1
 #    max_trials: 100,
 #    objective: 'val_accuracy',
 #    metrics: 'accuracy',
