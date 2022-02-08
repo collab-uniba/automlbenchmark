@@ -35,6 +35,14 @@ AutoGluon_bestquality:
   params:
     presets: best_quality
 
+AutoViML:
+  version: 'stable'
+  descritpion: |
+    Automatically Build Variant Interpretable ML models fast! Auto_ViML is pronounced "auto vimal". 
+  project: https://github.com/AutoViML/Auto_ViML
+  params:
+    verbose: 0
+
 autosklearn:
   version: 'stable'
   description: |
@@ -173,23 +181,6 @@ TPOT:
 #    max_eval_time_mins: 2
 #    population_size: 25
 #    verbosity: 2
-
-AutoKeras:
-  version: 'stable'
-  descritpion: |
-    AutoKeras: An AutoML system based on Keras. It is developed by DATA Lab at Texas A&M University. 
-    The goal of AutoKeras is to make machine learning accessible to everyone..
-  project: https://github.com/keras-team/autokeras
-  refs:
-    - https://autokeras.com
-    - https://github.com/keras-team
-  params:
-    overwrite: True
-#    verbose: 1
-#    max_trials: 100,
-#    objective: 'val_accuracy',
-#    metrics: 'accuracy',
-#    directory: None  # creates a folder with the name of the AutoModel in the current directorys
 
 
 #######################################

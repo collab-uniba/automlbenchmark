@@ -1,9 +1,10 @@
 import logging
 import os
 import shutil
-import warnings
 import sys
 import tempfile
+import warnings
+
 warnings.simplefilter("ignore")
 
 if sys.platform == 'darwin':
@@ -11,14 +12,14 @@ if sys.platform == 'darwin':
 
 import matplotlib
 import pandas as pd
+
 matplotlib.use('agg')  # no need for tk
 
-from autogluon.tabular import TabularPredictor
-from autogluon.core.utils.savers import save_pd, save_pkl
 import autogluon.core.metrics as metrics
+from autogluon.core.utils.savers import save_pd, save_pkl
+from autogluon.tabular import TabularPredictor
 from autogluon.tabular.version import __version__
-
-from frameworks.shared.callee import call_run, result, output_subdir
+from frameworks.shared.callee import call_run, output_subdir, result
 from frameworks.shared.utils import Timer, zip_path
 
 log = logging.getLogger(__name__)
@@ -96,7 +97,14 @@ def run(dataset, config):
 
     save_artifacts(predictor, leaderboard, config)
     shutil.rmtree(predictor.path, ignore_errors=True)
-
+    print("\n**************")
+    with open(file="predictions.txt", mode="w") as f:
+        f.write(str(predictions))
+    print(predictions)
+    print("**************\n")
+    with open(file="prob_labes.txt", mode="w") as f:
+        f.write(str(prob_labels))
+    print("**************\n")
     return result(output_file=config.output_predictions_file,
                   predictions=predictions,
                   probabilities=probabilities,

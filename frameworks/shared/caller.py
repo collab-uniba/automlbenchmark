@@ -6,14 +6,23 @@ from tempfile import TemporaryDirectory, mktemp
 from typing import List, Optional, Union
 
 import numpy as np
-
 from amlb.benchmark import TaskConfig
 from amlb.data import Dataset
 from amlb.resources import config as rconfig
 from amlb.results import NoResultError, save_predictions
 
-from .utils import Namespace as ns, Timer, dir_of, run_cmd, json_dumps, json_load, profile
-from .utils import is_serializable_data, deserialize_data, serialize_data
+from .utils import Namespace as ns
+from .utils import (
+    Timer,
+    deserialize_data,
+    dir_of,
+    is_serializable_data,
+    json_dumps,
+    json_load,
+    profile,
+    run_cmd,
+    serialize_data,
+)
 
 log = logging.getLogger(__name__)
 

@@ -539,7 +539,9 @@ class BenchmarkTask:
         try:
             log.info("Running task %s on framework %s with config:\n%s", task_config.name, self.benchmark.framework_name, repr_def(task_config))
             json_dump(task_config, task_config.output_metadata_file, style='pretty')
-            meta_result = self.benchmark.framework_module.run(self._dataset, task_config)
+            import frameworks.AutoViML as fmwk
+            meta_result = fmwk.run(self._dataset, task_config)
+            #meta_result = self.benchmark.framework_module.run(self._dataset, task_config)
         except Exception as e:
             if rconfig().job_scheduler.exit_on_job_failure:
                 raise
